@@ -1,6 +1,6 @@
 # Fieldnotes Object Counter
 
-Upload an image or video and the model automatically labels, highlights, and counts detected objects. Detection runs in your browser with the public ONNX OWL-ViT model; your media is not uploaded.
+Upload an image or video and the models automatically label, highlight, and count detected objects. OWL-ViT finds object regions and CLIP classifies each crop; inference runs in your browser and your media is not uploaded.
 
 ## Run locally
 
@@ -9,10 +9,11 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. The detector and its model weights download the first time you analyze a file, so that first analysis needs an internet connection. Later runs use the browser cache.
+Open the local URL printed by Vite. Detector and classifier weights download the first time you analyze a file, so that first analysis needs an internet connection. Later runs use the browser cache. Model inference runs in a background worker to keep the page interactive.
+- The detector compares objects against an internal list of common categories, including people, vehicles, animals, produce, and sea life. A second model classifies each detected crop to refine broad labels. Results can still be uncertain or incorrect, especially for small, obscured, or unfamiliar objects, so review the marked image and confidence scores.
 
 ## Notes
 
-- The detector compares objects against an internal list of common categories, including people, vehicles, animals, and produce such as potatoes. It can still mislabel or miss small, obscured, or unfamiliar objects, so review the marked image and confidence scores.
 - Video analysis samples up to 120 frames. The displayed count is the peak number visible in a sampled frame, with the average per frame alongside it; it does not track unique objects across the clip.
+- The detector scans overlapping crops to improve recall for smaller objects. Zoom the preview and drag it to inspect details.
 - Supported media depends on the codecs your browser can decode. The app accepts image and video files and keeps the selected media on-device.

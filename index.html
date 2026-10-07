@@ -48,7 +48,7 @@
               </span>
               <span class="drop-title">Drop a file to start</span>
               <span class="drop-subtitle">or <span>browse your files</span></span>
-              <span class="drop-formats">Images & video · Any browser-playable format</span>
+              <span class="drop-formats">Images & video · Any browser-playable format · Drag to pan when zoomed</span>
             </label>
 
             <div class="preview hidden" id="preview">
@@ -73,8 +73,8 @@
                 </div>
               </div>
               <div class="preview-stage" id="preview-stage">
-                <img id="image-preview" class="media-preview hidden" alt="Selected image" />
-                <video id="video-preview" class="media-preview hidden" controls playsinline></video>
+                <img id="image-preview" class="media-preview hidden" alt="Selected image" draggable="false" />
+                <video id="video-preview" class="media-preview hidden" controls playsinline draggable="false"></video>
                 <canvas id="overlay" aria-hidden="true"></canvas>
               </div>
               <div class="preview-footer">
@@ -109,8 +109,8 @@
                 <span class="setting-description">Hide weaker detections</span>
               </div>
               <label class="confidence-control" for="confidence-input">
-                <input id="confidence-input" type="range" min="5" max="50" value="15" />
-                <output id="confidence-value" for="confidence-input">15%</output>
+                <input id="confidence-input" type="range" min="3" max="40" value="8" />
+                <output id="confidence-value" for="confidence-input">8%</output>
               </label>
             </div>
             <div class="setting-row video-setting" id="video-setting">
@@ -126,7 +126,8 @@
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
             </button>
             <p class="model-note"><span class="model-indicator"></span> OWL-ViT · OPEN-VOCABULARY DETECTION</p>
-            <p class="category-note">Checks common objects and produce, including potatoes. Small or partly hidden objects may be mislabeled.</p>
+            <p class="model-note"><span class="model-indicator"></span> OWL-ViT + CLIP · OBJECT RECOGNITION</p>
+            <p class="category-note">Uses the whole object crop to refine labels, including produce and sea life. Unclear crops are marked unidentified.</p>
             <p class="error-message hidden" id="error-message" role="alert"></p>
             <section class="results hidden" id="results" aria-live="polite">
               <div class="section-heading results-heading">

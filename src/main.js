@@ -30,36 +30,40 @@ const mediaDimensions = document.querySelector('#media-dimensions');
 
 let selectedFile = null;
 let fileUrl = null;
-let detectorPromise = null;
+let inferenceWorker = null;
+let pendingInference = null;
 let isAnalyzing = false;
 let activeDetections = [];
 let zoomLevel = 1;
-
-const objectCandidates = [...new Set([
-  'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
-  'traffic light', 'fire hydrant', 'street sign', 'stop sign', 'parking meter', 'bench',
-  'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
-  'hat', 'backpack', 'umbrella', 'shoe', 'eyeglasses', 'handbag', 'tie', 'suitcase',
-  'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-  'skateboard', 'surfboard', 'tennis racket', 'bottle', 'plate', 'wine glass', 'cup', 'fork',
-  'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-  'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'mirror',
-  'dining table', 'window', 'desk', 'toilet', 'door', 'television', 'laptop', 'computer mouse',
-  'remote control', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-  'refrigerator', 'blender', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair dryer',
-  'toothbrush', 'hair brush', 'potato', 'tomato', 'onion', 'cucumber', 'bell pepper', 'corn',
-  'lettuce', 'cabbage', 'cauliflower', 'eggplant', 'garlic', 'ginger', 'sweet potato', 'pumpkin',
-  'zucchini', 'green beans', 'peas', 'mushroom', 'avocado', 'lemon', 'lime', 'strawberry',
-  'grapes', 'watermelon', 'pineapple', 'mango', 'peach', 'pear', 'kiwi', 'bread', 'egg', 'cheese',
-  'fish', 'rice', 'flower', 'plant', 'tree', 'box', 'bag', 'toy', 'candle', 'basket',
-])];
+let panX = 0;
+let panY = 0;
+let dragOrigin = null;
 
 function setZoom(value) {
   zoomLevel = Math.min(3, Math.max(0.5, value));
+  if (zoomLevel <= 1) {
+    panX = 0;
+    panY = 0;
+  }
   stage.style.setProperty('--preview-zoom', zoomLevel);
+  stage.style.setProperty('--preview-pan-x', `${panX}px`);
+  stage.style.setProperty('--preview-pan-y', `${panY}px`);
+  stage.classList.toggle('zoomed', zoomLevel > 1);
+  limitPan();
   zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   zoomOutButton.disabled = zoomLevel <= 0.5;
   zoomInButton.disabled = zoomLevel >= 3;
+}
+
+function limitPan() {
+  const media = getMediaElement();
+  if (!media || zoomLevel <= 1) return;
+  const maxX = Math.max(0, (media.offsetWidth * zoomLevel - stage.clientWidth) / 2);
+  const maxY = Math.max(0, (media.offsetHeight * zoomLevel - stage.clientHeight) / 2);
+  panX = Math.min(maxX, Math.max(-maxX, panX));
+  panY = Math.min(maxY, Math.max(-maxY, panY));
+  stage.style.setProperty('--preview-pan-x', `${panX}px`);
+  stage.style.setProperty('--preview-pan-y', `${panY}px`);
 }
 
 function setProgress(label, value) {
@@ -170,7 +174,52 @@ function captureFrame(media) {
   inferenceCanvas.width = width;
   inferenceCanvas.height = height;
   inferenceContext.drawImage(media, 0, 0, width, height);
-  return inferenceCanvas;
+  return { width, height, pixels: inferenceContext.getImageData(0, 0, width, height).data };
+}
+
+function getInferenceWorker() {
+  if (inferenceWorker) return inferenceWorker;
+  inferenceWorker = new Worker(new URL('./inference-worker.js', import.meta.url), { type: 'module' });
+  inferenceWorker.addEventListener('message', ({ data }) => {
+    if (data.type === 'ready') {
+      document.querySelector('#candidate-count').textContent = `${data.candidateCount} OBJECT CATEGORIES`;
+    } else if (data.type === 'progress') {
+      setProgress(data.label, data.value);
+    } else if (data.type === 'result' || data.type === 'error') {
+      const request = pendingInference;
+      pendingInference = null;
+      if (data.type === 'result') request?.resolve(data.detections);
+      else request?.reject(new Error(data.message));
+    }
+  });
+  inferenceWorker.addEventListener('error', (event) => {
+    pendingInference?.reject(new Error(event.message || 'Background analysis stopped unexpectedly.'));
+    pendingInference = null;
+    inferenceWorker?.terminate();
+    inferenceWorker = null;
+  });
+  return inferenceWorker;
+}
+
+function detectFrame(media, frameNumber, totalFrames) {
+  const { width, height, pixels } = captureFrame(media);
+  return new Promise((resolve, reject) => {
+    pendingInference = { resolve, reject };
+    try {
+      getInferenceWorker().postMessage({
+        type: 'analyze',
+        width,
+        height,
+        pixels: pixels.buffer,
+        threshold: Number(confidenceInput.value) / 100,
+        frameNumber,
+        totalFrames,
+      }, [pixels.buffer]);
+    } catch (error) {
+      pendingInference = null;
+      reject(error);
+    }
+  });
 }
 
 function syncOverlay() {
@@ -218,7 +267,8 @@ function drawDetections() {
     const boxHeight = ymax - ymin;
     context.strokeStyle = color;
     context.strokeRect(xmin, ymin, boxWidth, boxHeight);
-    const label = `${detection.label} ${Math.round(detection.score * 100)}%`;
+    const confidence = detection.classificationScore ?? detection.score;
+    const label = `${detection.label} ${Math.round(confidence * 100)}%`;
     const textWidth = context.measureText(label).width;
     const labelY = Math.max(0, ymin - 27 * scale);
     context.fillStyle = color;
@@ -226,23 +276,6 @@ function drawDetections() {
     context.fillStyle = '#17211b';
     context.fillText(label, xmin + 8 * scale, labelY + 17 * scale);
   });
-}
-
-function getDetector() {
-  if (!detectorPromise) {
-    detectorPromise = import('@huggingface/transformers').then(({ pipeline, env }) => {
-      env.allowLocalModels = false;
-      return pipeline('zero-shot-object-detection', 'onnx-community/owlvit-base-patch32-ONNX', {
-        dtype: 'q4',
-        progress_callback: (progress) => {
-          if (progress.status === 'progress' && progress.total) {
-            setProgress('Downloading object detector', (progress.loaded / progress.total) * 100);
-          }
-        },
-      });
-    });
-  }
-  return detectorPromise;
 }
 
 async function waitForSeek(video, time) {
@@ -295,28 +328,25 @@ async function analyze() {
   const frameCounts = [];
 
   try {
-    setProgress('Loading object detector', 0);
-    const detector = await getDetector();
+    setProgress('Starting background model', 0);
     const media = getMediaElement();
 
     if (isVideo) {
       const duration = videoPreview.duration;
       const totalFrames = Math.min(120, Math.max(1, Math.ceil(duration)));
       const interval = duration > 120 ? duration / totalFrames : 1;
+      videoPreview.pause();
       for (let frame = 0; frame < totalFrames; frame += 1) {
         const time = Math.min(frame * interval, Math.max(0, duration - 0.05));
         await waitForSeek(videoPreview, time);
         progressLabel.textContent = `Inspecting frame ${frame + 1} of ${totalFrames}`;
-        const detections = await detector(captureFrame(media), objectCandidates, { threshold: Number(confidenceInput.value) / 100 });
-        const accepted = detections.filter((detection) => detection.score >= Number(confidenceInput.value) / 100);
-        frameCounts.push({ detections: accepted });
-        activeDetections = accepted;
+        const detections = await detectFrame(media, frame + 1, totalFrames);
+        frameCounts.push({ detections });
+        activeDetections = detections;
         syncOverlay();
-        setProgress(`Inspecting frame ${frame + 1} of ${totalFrames}`, ((frame + 1) / totalFrames) * 100);
       }
     } else {
-      const detections = await detector(captureFrame(media), objectCandidates, { threshold: Number(confidenceInput.value) / 100 });
-      activeDetections = detections.filter((detection) => detection.score >= Number(confidenceInput.value) / 100);
+      activeDetections = await detectFrame(media, 1, 1);
       frameCounts.push({ detections: activeDetections });
       syncOverlay();
       setProgress('Analysis complete', 100);
@@ -324,7 +354,6 @@ async function analyze() {
 
     renderResults(frameCounts, isVideo);
   } catch (error) {
-    detectorPromise = null;
     showError(error.message?.includes('fetch') || error.message?.includes('Failed')
       ? 'The detector could not be downloaded. Check your connection and try again.'
       : `Analysis failed: ${error.message || 'Unexpected error.'}`);
@@ -340,14 +369,37 @@ async function analyze() {
 fileInput.addEventListener('change', (event) => setFile(event.target.files?.[0]));
 removeFileButton.addEventListener('click', clearFile);
 analyzeButton.addEventListener('click', analyze);
-document.querySelector('#candidate-count').textContent = `${objectCandidates.length} OBJECT CATEGORIES`;
 zoomOutButton.addEventListener('click', () => setZoom(zoomLevel - 0.25));
 zoomResetButton.addEventListener('click', () => setZoom(1));
 zoomInButton.addEventListener('click', () => setZoom(zoomLevel + 0.25));
+stage.addEventListener('pointerdown', (event) => {
+  const media = getMediaElement();
+  if (zoomLevel <= 1 || event.button !== 0 || event.target !== media) return;
+  if (media === videoPreview && event.offsetY > media.clientHeight - 48) return;
+  dragOrigin = { x: event.clientX - panX, y: event.clientY - panY };
+  stage.classList.add('dragging');
+  stage.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+stage.addEventListener('pointermove', (event) => {
+  if (!dragOrigin) return;
+  panX = event.clientX - dragOrigin.x;
+  panY = event.clientY - dragOrigin.y;
+  limitPan();
+});
+function finishPan(event) {
+  if (!dragOrigin) return;
+  dragOrigin = null;
+  stage.classList.remove('dragging');
+  if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+}
+stage.addEventListener('pointerup', finishPan);
+stage.addEventListener('pointercancel', finishPan);
 confidenceInput.addEventListener('input', () => {
   confidenceValue.value = `${confidenceInput.value}%`;
 });
 window.addEventListener('resize', syncOverlay);
+window.addEventListener('resize', limitPan);
 imagePreview.addEventListener('load', syncOverlay);
 videoPreview.addEventListener('seeked', syncOverlay);
 
