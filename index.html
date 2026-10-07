@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f3ed" />
+    <meta name="description" content="Find and count objects in your images and videos, right in your browser." />
+    <title>Fieldnotes | Object counter</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Fieldnotes home">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <span>fieldnotes<span class="brand-period">.</span></span>
+        </a>
+        <div class="topbar-note"><span class="status-dot"></span> PRIVATE BY DESIGN <span class="note-divider">/</span> RUNS IN YOUR BROWSER</div>
+        <span class="edition">OBJECT COUNTER <span>01</span></span>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <div class="intro-copy">
+            <p class="eyebrow"><span>01</span> IMAGE & VIDEO ANALYSIS</p>
+            <h1 id="page-title">See what’s<br />in the <em>frame.</em></h1>
+            <p class="intro-description">Drop in a photo or clip. Name what you’re looking for. Get a count for every object, separately.</p>
+          </div>
+          <div class="intro-stamp" aria-hidden="true">
+            <span class="stamp-cross">+</span>
+            <span>LOOK<br />CLOSER</span>
+            <span class="stamp-coordinates">40° 43′ 55″ N<br />73° 59′ 11″ W</span>
+          </div>
+        </section>
+
+        <section class="workspace" aria-label="Object detection workspace">
+          <div class="media-column">
+            <div class="section-heading">
+              <span class="section-index">A</span>
+              <h2>YOUR MATERIAL</h2>
+              <span class="heading-rule"></span>
+              <span class="file-type-note">IMAGE / VIDEO</span>
+            </div>
+
+            <label class="dropzone" id="dropzone" for="file-input" tabindex="0">
+              <input id="file-input" type="file" accept="image/*,video/*" />
+              <span class="upload-glyph" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none"><path d="M24 32V10m0 0-8 8m8-8 8 8M11 30v8a3 3 0 0 0 3 3h20a3 3 0 0 0 3-3v-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              </span>
+              <span class="drop-title">Drop a file to start</span>
+              <span class="drop-subtitle">or <span>browse your files</span></span>
+              <span class="drop-formats">Images & video · Any browser-playable format</span>
+            </label>
+
+            <div class="preview hidden" id="preview">
+              <div class="preview-toolbar">
+                <div class="file-details">
+                  <span class="file-kind" id="file-kind">IMAGE</span>
+                  <span class="file-name" id="file-name"></span>
+                </div>
+                <div class="preview-actions">
+                  <div class="zoom-controls" aria-label="Preview zoom controls">
+                    <button class="icon-button" id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">
+                      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    </button>
+                    <button class="zoom-level" id="zoom-reset" type="button" aria-label="Reset zoom" title="Reset zoom">100%</button>
+                    <button class="icon-button" id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">
+                      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12m-6-6h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-button remove-button" id="remove-file" type="button" aria-label="Remove file" title="Remove file">
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="preview-stage" id="preview-stage">
+                <img id="image-preview" class="media-preview hidden" alt="Selected image" />
+                <video id="video-preview" class="media-preview hidden" controls playsinline></video>
+                <canvas id="overlay" aria-hidden="true"></canvas>
+              </div>
+              <div class="preview-footer">
+                <span><span class="status-dot"></span> ORIGINAL FILE STAYS ON THIS DEVICE</span>
+                <span id="media-dimensions">WAITING FOR ANALYSIS</span>
+              </div>
+            </div>
+
+            <div class="progress-row hidden" id="progress-row" aria-live="polite">
+              <div class="progress-meta"><span id="progress-label">Loading detector</span><span id="progress-value">0%</span></div>
+              <div class="progress-track"><span id="progress-bar"></span></div>
+            </div>
+          </div>
+
+          <aside class="controls-column">
+            <div class="section-heading">
+              <span class="section-index">B</span>
+              <h2>AUTOMATIC DETECTION</h2>
+              <span class="heading-rule"></span>
+            </div>
+
+            <div class="auto-detect-note">
+              <span class="auto-detect-mark" aria-hidden="true">✳</span>
+              <p>The model finds and labels objects automatically. No object names to enter.</p>
+              <span class="class-count" id="candidate-count"></span>
+            </div>
+
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div>
+                <span class="setting-name">Match confidence</span>
+                <span class="setting-description">Hide weaker detections</span>
+              </div>
+              <label class="confidence-control" for="confidence-input">
+                <input id="confidence-input" type="range" min="5" max="50" value="15" />
+                <output id="confidence-value" for="confidence-input">15%</output>
+              </label>
+            </div>
+            <div class="setting-row video-setting" id="video-setting">
+              <div>
+                <span class="setting-name">Video sampling</span>
+                <span class="setting-description">At least one second apart</span>
+              </div>
+              <span class="setting-value">MAX 120</span>
+            </div>
+
+            <button class="analyze-button" id="analyze-button" type="button" disabled>
+              <span id="analyze-label">Choose a file first</span>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </button>
+            <p class="model-note"><span class="model-indicator"></span> OWL-ViT · OPEN-VOCABULARY DETECTION</p>
+            <p class="category-note">Checks common objects and produce, including potatoes. Small or partly hidden objects may be mislabeled.</p>
+            <p class="error-message hidden" id="error-message" role="alert"></p>
+            <section class="results hidden" id="results" aria-live="polite">
+              <div class="section-heading results-heading">
+                <span class="section-index">C</span>
+                <h2>OBJECTS FOUND</h2>
+                <span class="heading-rule"></span>
+              </div>
+              <p class="results-meta" id="results-meta"></p>
+              <div class="results-content" id="results-content"></div>
+            </section>
+          </aside>
+        </section>
+
+        <footer class="page-footer">
+          <span>FIELDNOTES <span class="brand-period">/</span> VISUAL INVENTORY TOOL</span>
+          <span>DETECTION IS AN ESTIMATE. CHECK THE FRAME.</span>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
