@@ -73,6 +73,10 @@ h1 em { font-family: Georgia, serif; font-weight: 400; }
 .drop-subtitle { font-size: 13px; color: var(--muted); margin-top: 5px; }
 .drop-subtitle span { color: #577d2b; text-decoration: underline; text-underline-offset: 3px; }
 .drop-formats { font: 10px var(--mono); color: #898d82; margin-top: 21px; }
+.sample-library { margin: 11px 0 0; display: flex; align-items: center; gap: 12px; }
+.sample-library label { font: 9px var(--mono); letter-spacing: .06em; color: #777b70; white-space: nowrap; }
+.sample-library select { min-width: 0; flex: 1; height: 36px; border: 1px solid #d0d2c9; border-radius: 0; background: var(--paper); padding: 0 10px; color: var(--ink); font-size: 12px; }
+.sample-library select:focus-visible { outline: 2px solid #718b49; outline-offset: 2px; }
 
 .preview { margin-top: 18px; border: 1px solid var(--line); background: var(--paper); }
 .preview-toolbar, .preview-footer { min-height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; }
@@ -156,6 +160,7 @@ input[type='range'] { accent-color: #708d43; width: 90px; height: 3px; }
   .intro-description { font-size: 13px; max-width: 340px; }
   .workspace { grid-template-columns: 1fr; gap: 35px; }
   .dropzone { min-height: 250px; }
+  .sample-library { align-items: stretch; flex-direction: column; gap: 7px; }
   .controls-column { padding-bottom: 5px; }
   .auto-detect-note { min-height: 140px; margin-top: 22px; }
   .preview-stage { height: min(65vw, 350px); }

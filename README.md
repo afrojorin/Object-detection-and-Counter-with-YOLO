@@ -14,6 +14,7 @@ Open the local URL printed by Vite. Detector and classifier weights download the
 
 ## Notes
 
-- Video analysis samples up to 120 frames. The displayed count is the peak number visible in a sampled frame, with the average per frame alongside it; it does not track unique objects across the clip.
+- Video analysis samples up to 120 frames. Motion-linked IDs keep objects associated across frames; video class counts represent unique tracks, with peak simultaneous count and per-frame average alongside them. Tracking can split an object if it disappears for several sampled frames or moves too far between samples.
+- The bundled clips in `videos/` are available from the sample-video picker. Training a custom model requires labeled examples; the supplied folders currently contain media but no ground-truth annotations.
 - The detector scans overlapping crops to improve recall for smaller objects. Zoom the preview and drag it to inspect details.
 - Supported media depends on the codecs your browser can decode. The app accepts image and video files and keeps the selected media on-device.

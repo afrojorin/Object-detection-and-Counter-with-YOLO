@@ -1,7 +1,10 @@
 import './style.css';
+import { ObjectTracker } from './tracking.js';
 
 const fileInput = document.querySelector('#file-input');
 const dropzone = document.querySelector('#dropzone');
+const sampleLibrary = document.querySelector('.sample-library');
+const sampleVideoSelect = document.querySelector('#sample-video');
 const preview = document.querySelector('#preview');
 const imagePreview = document.querySelector('#image-preview');
 const videoPreview = document.querySelector('#video-preview');
@@ -34,6 +37,7 @@ let inferenceWorker = null;
 let pendingInference = null;
 let isAnalyzing = false;
 let activeDetections = [];
+const videoTracker = new ObjectTracker();
 let zoomLevel = 1;
 let panX = 0;
 let panY = 0;
@@ -73,7 +77,7 @@ function setProgress(label, value) {
   progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
 }
 
-function setFile(file) {
+function setFile(file, sampleName = '') {
   if (!file || (!file.type.startsWith('image/') && !file.type.startsWith('video/'))) {
     showError('Choose an image or video file your browser can open.');
     return;
@@ -81,6 +85,8 @@ function setFile(file) {
 
   clearFile();
   selectedFile = file;
+  sampleLibrary.classList.add('hidden');
+  sampleVideoSelect.value = sampleName;
   fileUrl = URL.createObjectURL(file);
   dropzone.classList.add('hidden');
   preview.classList.remove('hidden');
@@ -127,6 +133,7 @@ function clearFile() {
   if (fileUrl) URL.revokeObjectURL(fileUrl);
   fileUrl = null;
   selectedFile = null;
+  videoTracker.reset();
   imagePreview.onload = null;
   imagePreview.onerror = null;
   videoPreview.onloadedmetadata = null;
@@ -139,6 +146,8 @@ function clearFile() {
   videoPreview.classList.add('hidden');
   preview.classList.add('hidden');
   dropzone.classList.remove('hidden');
+  sampleLibrary.classList.remove('hidden');
+  sampleVideoSelect.value = '';
   results.classList.add('hidden');
   progressRow.classList.add('hidden');
   errorMessage.classList.add('hidden');
@@ -268,7 +277,8 @@ function drawDetections() {
     context.strokeStyle = color;
     context.strokeRect(xmin, ymin, boxWidth, boxHeight);
     const confidence = detection.classificationScore ?? detection.score;
-    const label = `${detection.label} ${Math.round(confidence * 100)}%`;
+    const trackLabel = detection.trackId ? `#${detection.trackId} ` : '';
+    const label = `${trackLabel}${detection.label} ${Math.round(confidence * 100)}%`;
     const textWidth = context.measureText(label).width;
     const labelY = Math.max(0, ymin - 27 * scale);
     context.fillStyle = color;
@@ -291,21 +301,24 @@ async function waitForSeek(video, time) {
 }
 
 function renderResults(frameCounts, isVideo) {
-  const labels = [...new Set(frameCounts.flatMap((frame) => frame.detections.map((detection) => detection.label)))].sort();
+  const labels = [...new Set(isVideo
+    ? videoTracker.tracks.map((track) => track.label)
+    : frameCounts.flatMap((frame) => frame.detections.map((detection) => detection.label)))].sort();
   const rows = labels.map((label, index) => {
     const perFrame = frameCounts.map((frame) => frame.detections.filter((detection) => detection.label === label).length);
     const peak = Math.max(0, ...perFrame);
     const total = perFrame.reduce((sum, count) => sum + count, 0);
     const average = frameCounts.length ? (total / frameCounts.length).toFixed(1) : '0';
+    const uniqueTracks = videoTracker.tracks.filter((track) => track.label === label).length;
     return `<div class="result-row">
       <span class="result-number">${String(index + 1).padStart(2, '0')}</span>
       <span class="result-name">${escapeHtml(label.toUpperCase())}</span>
-      <span class="result-detail">${isVideo ? `${average} AVG / FRAME` : 'IN THIS IMAGE'}</span>
-      <span class="result-count">${peak}<small>FOUND</small></span>
+      <span class="result-detail">${isVideo ? `${peak} PEAK VISIBLE · ${average} AVG / FRAME` : 'IN THIS IMAGE'}</span>
+      <span class="result-count">${isVideo ? uniqueTracks : peak}<small>${isVideo ? 'UNIQUE' : 'FOUND'}</small></span>
     </div>`;
   });
   resultsContent.innerHTML = rows.join('') || '<p class="no-results">No supported objects were detected. Try a clearer image or lower the confidence threshold.</p>';
-  resultsMeta.textContent = isVideo ? `${frameCounts.length} FRAMES SAMPLED · PEAK PER FRAME` : 'SINGLE FRAME · IMAGE';
+  resultsMeta.textContent = isVideo ? `${frameCounts.length} FRAMES SAMPLED · TRACKED OBJECTS COUNTED ONCE` : 'SINGLE FRAME · IMAGE';
   results.classList.remove('hidden');
 }
 
@@ -341,8 +354,9 @@ async function analyze() {
         await waitForSeek(videoPreview, time);
         progressLabel.textContent = `Inspecting frame ${frame + 1} of ${totalFrames}`;
         const detections = await detectFrame(media, frame + 1, totalFrames);
-        frameCounts.push({ detections });
-        activeDetections = detections;
+        const trackedDetections = videoTracker.update(detections, frame + 1);
+        frameCounts.push({ detections: trackedDetections });
+        activeDetections = trackedDetections;
         syncOverlay();
       }
     } else {
@@ -366,7 +380,21 @@ async function analyze() {
   }
 }
 
+async function loadSampleVideo() {
+  const sampleName = sampleVideoSelect.value;
+  if (!sampleName) return;
+  try {
+    const response = await fetch(`/videos/${encodeURIComponent(sampleName)}`);
+    if (!response.ok) throw new Error('The sample video could not be loaded.');
+    const blob = await response.blob();
+    setFile(new File([blob], sampleName, { type: blob.type || 'video/mp4' }), sampleName);
+  } catch (error) {
+    showError(error.message || 'The sample video could not be loaded.');
+  }
+}
+
 fileInput.addEventListener('change', (event) => setFile(event.target.files?.[0]));
+sampleVideoSelect.addEventListener('change', loadSampleVideo);
 removeFileButton.addEventListener('click', clearFile);
 analyzeButton.addEventListener('click', analyze);
 zoomOutButton.addEventListener('click', () => setZoom(zoomLevel - 0.25));
